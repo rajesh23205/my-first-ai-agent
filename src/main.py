@@ -55,4 +55,14 @@ response = client.models.generate_content(
 )
 
 
-print(response)
+for part in response.candidates[0].content.parts:
+    if part.function_call:
+        function_call = part.function_call
+
+        print("Tool:", part.function_call.name)
+        print("Arguments:", part.function_call.args)
+
+        if(function_call.name == "calculator"):
+            result = calculator(**function_call.args)
+
+            print("Tool result:", result)
