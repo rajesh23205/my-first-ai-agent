@@ -14,3 +14,8 @@ def calculator(a: float, b: float, operation: str) -> float:
         return a / b
 
     raise ValueError(f"Unknown operation: {operation}")
+
+
+if __name__ == "__main__":
+    result = calculator(25, 48, "multiply")
+    print(result)
