@@ -174,3 +174,38 @@ for item in square_response.output:
             result = calculator(**arguments)
 
             print("Tool result:", result)
+
+            tool_output = {
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": str(result),
+            }
+
+            final_response = client.responses.create(
+                model="gpt-5.6-luna",
+                input=[
+                    {
+                        "role": "user",
+                        "content": user_squre_question,
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": item.call_id,
+                        "name": item.name,
+                        "arguments": item.arguments,
+                    },
+                    tool_output,
+                    {
+                        "role": "user",
+                        "content": "Using the calculator result, answer the user's question in a clear natural-language sentence.",
+                    },
+                ],
+                tools=[calculator_tool],
+            )
+
+
+            # --------------------------------------------------
+            # 9. Print OpenAI's final answer
+            # --------------------------------------------------
+
+            print("Final answer:", final_response.output_text)
