@@ -1,8 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 from tools import calculator
 
@@ -13,150 +12,127 @@ from tools import calculator
 
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 
 if not api_key:
-    raise ValueError("GEMINI_API_KEY is not set")
+    raise ValueError("OPENAI_API_KEY is not set")
 
 
 # --------------------------------------------------
-# 2. Create Gemini client
+# 2. Create OpenAI client
 # --------------------------------------------------
 
-client = genai.Client(api_key=api_key)
-
-
-# --------------------------------------------------
-# 3. Describe our calculator tool to Gemini
-# --------------------------------------------------
-
-calculator_tool = types.Tool(
-    function_declarations=[
-        types.FunctionDeclaration(
-            name="calculator",
-            description="Performs basic arithmetic calculations.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "a": types.Schema(
-                        type="NUMBER",
-                        description="The first number.",
-                    ),
-                    "b": types.Schema(
-                        type="NUMBER",
-                        description="The second number.",
-                    ),
-                    "operation": types.Schema(
-                        type="STRING",
-                        description=(
-                            "The operation to perform: "
-                            "add, subtract, multiply, or divide."
-                        ),
-                    ),
-                },
-                required=["a", "b", "operation"],
-            ),
-        )
-    ]
-)
+client = OpenAI(api_key=api_key)
 
 
 # --------------------------------------------------
-# 4. Send the user's question to Gemini
+# 3. Describe our calculator tool to OpenAI
+# --------------------------------------------------
+
+calculator_tool = {
+    "type": "function",
+    "name": "calculator",
+    "description": "Performs basic arithmetic calculations.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "a": {
+                "type": "number",
+                "description": "The first number.",
+            },
+            "b": {
+                "type": "number",
+                "description": "The second number.",
+            },
+            "operation": {
+                "type": "string",
+                "description": (
+                    "The operation to perform: "
+                    "add, subtract, multiply, square, or divide."
+                ),
+            },
+        },
+        "required": ["a", "b", "operation"],
+    },
+}
+
+
+# --------------------------------------------------
+# 4. Send the user's question to OpenAI
 # --------------------------------------------------
 
 user_question = "What is 25 multiplied by 48?"
 
-response = client.models.generate_content(
-    model="gemini-3.8-flash",
-    contents=user_question,
-    config=types.GenerateContentConfig(
-        tools=[calculator_tool]
-    ),
+response = client.responses.create(
+    model="gpt-5.6-luna",
+    input=user_question,
+    tools=[calculator_tool],
 )
 
 
 # --------------------------------------------------
-# 5. Check whether Gemini wants to use a tool
+# 5. Check whether OpenAI wants to use a tool
 # --------------------------------------------------
 
-for part in response.candidates[0].content.parts:
+for item in response.output:
 
-    if part.function_call:
+    if item.type == "function_call":
 
-        function_call = part.function_call
-
-        print("Tool:", function_call.name)
-        print("Arguments:", function_call.args)
+        print("Tool:", item.name)
+        print("Arguments:", item.arguments)
 
 
         # --------------------------------------------------
         # 6. Execute the requested Python function
         # --------------------------------------------------
 
-        if function_call.name == "calculator":
+        if item.name == "calculator":
 
-            result = calculator(**function_call.args)
+            import json
+
+            arguments = json.loads(item.arguments)
+
+            result = calculator(**arguments)
 
             print("Tool result:", result)
 
 
             # --------------------------------------------------
-            # 7. Create the tool response
+            # 7. Send the tool result back to OpenAI
             # --------------------------------------------------
 
-            function_response_part = types.Part.from_function_response(
-                name=function_call.name,
-                response={
-                    "result": result
-                },
-                # id=function_call.id,
+            tool_output = {
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": str(result),
+            }
+
+
+            # --------------------------------------------------
+            # 8. Ask OpenAI for the final answer
+            # --------------------------------------------------
+
+            final_response = client.responses.create(
+                model="gpt-5.6-luna",
+                input=[
+                    {
+                        "role": "user",
+                        "content": user_question,
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": item.call_id,
+                        "name": item.name,
+                        "arguments": item.arguments,
+                    },
+                    tool_output,
+                ],
+                tools=[calculator_tool],
             )
 
 
             # --------------------------------------------------
-            # 8. Send the tool result back to Gemini
+            # 9. Print OpenAI's final answer
             # --------------------------------------------------
 
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(
-                            text=user_question
-                        )
-                    ],
-                ),
-
-                # Gemini's previous response containing
-                # the function call
-                response.candidates[0].content,
-
-                # Our Python tool's result
-                types.Content(
-                    role="user",
-                    parts=[
-                        function_response_part
-                    ],
-                ),
-            ]
-
-
-            # --------------------------------------------------
-            # 9. Ask Gemini for the final answer
-            # --------------------------------------------------
-
-            final_response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    tools=[calculator_tool]
-                ),
-            )
-
-
-            # --------------------------------------------------
-            # 10. Print Gemini's final answer
-            # --------------------------------------------------
-
-            print("Final answer:", final_response.text)
+            print("Final answer:", final_response.output_text)

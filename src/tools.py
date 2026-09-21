@@ -1,4 +1,4 @@
-def calculator(a: float, b: float, operation: str) -> float:
+def calculator(a: float, operation: str, b: float | None = None) -> float:
     if operation == "add":
         return a + b
 
@@ -7,6 +7,9 @@ def calculator(a: float, b: float, operation: str) -> float:
 
     if operation == "multiply":
         return a * b
+
+    if operation == "square":
+        return a * a
 
     if operation == "divide":
         if b == 0:
@@ -17,5 +20,5 @@ def calculator(a: float, b: float, operation: str) -> float:
 
 
 if __name__ == "__main__":
-    result = calculator(25, 48, "multiply")
+    result = calculator(25, "square")
     print(result)
