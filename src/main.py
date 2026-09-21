@@ -40,19 +40,19 @@ calculator_tool = {
                 "type": "number",
                 "description": "The first number.",
             },
-            "b": {
-                "type": "number",
-                "description": "The second number.",
-            },
             "operation": {
                 "type": "string",
                 "description": (
                     "The operation to perform: "
                     "add, subtract, multiply, square, or divide."
-                ),
+                )
+            },
+            "b": {
+                "type": "number",
+                "description": "The second number. Not required for squre",
             },
         },
-        "required": ["a", "b", "operation"],
+        "required": ["a", "operation"],
     },
 }
 
@@ -68,6 +68,17 @@ response = client.responses.create(
     input=user_question,
     tools=[calculator_tool],
 )
+
+user_squre_question = "What is square of 25?"
+
+square_response = client.responses.create(
+    model="gpt-5.6-luna",
+    input=user_squre_question,
+    tools=[calculator_tool],
+    tool_choice="required",
+)
+
+print("Square response:", square_response.output)
 
 
 # --------------------------------------------------
@@ -126,6 +137,10 @@ for item in response.output:
                         "arguments": item.arguments,
                     },
                     tool_output,
+                    {
+                        "role": "user",
+                        "content": "Using the calculator result, answer the user's question in a clear natural-language sentence.",
+                    },
                 ],
                 tools=[calculator_tool],
             )
@@ -136,3 +151,26 @@ for item in response.output:
             # --------------------------------------------------
 
             print("Final answer:", final_response.output_text)
+
+
+
+# --------------------------------------------------
+# 5. Check whether OpenAI wants to use a tool
+# --------------------------------------------------
+
+for item in square_response.output:
+
+    if item.type == "function_call":
+
+        print("Tool:", item.name)
+        print("Arguments:", item.arguments)
+
+        if item.name == "calculator":
+
+            import json
+
+            arguments = json.loads(item.arguments)
+
+            result = calculator(**arguments)
+
+            print("Tool result:", result)
