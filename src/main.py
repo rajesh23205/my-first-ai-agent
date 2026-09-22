@@ -83,64 +83,64 @@ def run_agent(user_question: str, tool_choice: bool = False) -> str:
     for item in response.output:
         if item.type != "function_call":
             return response.output_text
-
-        print("Tool:", item.name)
-        print("Arguments:", item.arguments)
-
-        # --------------------------------------------------
-        # 6. Execute our Python function
-        # --------------------------------------------------
-
-        if item.name == "calculator":
-            # Convert OpenAI's JSON arguments into a Python dictionary.
-            arguments = json.loads(item.arguments)
-
-            # Execute the actual Python calculator function.
-            result = calculator(**arguments)
-
-            print("Tool result:", result)
+        else:
+            print("Tool:", item.name)
+            print("Arguments:", item.arguments)
 
             # --------------------------------------------------
-            # 7. Send the tool result back to OpenAI
+            # 6. Execute our Python function
             # --------------------------------------------------
 
-            tool_output = {
-                "type": "function_call_output",
-                "call_id": item.call_id,
-                "output": str(result),
-            }
+            if item.name == "calculator":
+                # Convert OpenAI's JSON arguments into a Python dictionary.
+                arguments = json.loads(item.arguments)
 
-            # --------------------------------------------------
-            # 8. Ask OpenAI to generate the final answer
-            # --------------------------------------------------
+                # Execute the actual Python calculator function.
+                result = calculator(**arguments)
 
-            final_response = client.responses.create(
-                model="gpt-5.6-luna",
-                input=[
-                    {
-                        "role": "user",
-                        "content": user_question,
-                    },
-                    {
-                        "type": "function_call",
-                        "call_id": item.call_id,
-                        "name": item.name,
-                        "arguments": item.arguments,
-                    },
-                    tool_output,
-                    {
-                        "role": "user",
-                        "content": (
-                            "Using the calculator result, answer "
-                            "the user's question in a clear "
-                            "natural-language sentence."
-                        ),
-                    },
-                ],
-                tools=[calculator_tool],
-            )
+                print("Tool result:", result)
 
-            return final_response.output_text
+                # --------------------------------------------------
+                # 7. Send the tool result back to OpenAI
+                # --------------------------------------------------
+
+                tool_output = {
+                    "type": "function_call_output",
+                    "call_id": item.call_id,
+                    "output": str(result),
+                }
+
+                # --------------------------------------------------
+                # 8. Ask OpenAI to generate the final answer
+                # --------------------------------------------------
+
+                final_response = client.responses.create(
+                    model="gpt-5.6-luna",
+                    input=[
+                        {
+                            "role": "user",
+                            "content": user_question,
+                        },
+                        {
+                            "type": "function_call",
+                            "call_id": item.call_id,
+                            "name": item.name,
+                            "arguments": item.arguments,
+                        },
+                        tool_output,
+                        {
+                            "role": "user",
+                            "content": (
+                                "Using the calculator result, answer "
+                                "the user's question in a clear "
+                                "natural-language sentence."
+                            ),
+                        },
+                    ],
+                    tools=[calculator_tool],
+                )
+
+                return final_response.output_text
 
     # --------------------------------------------------
     # 9. No tool was called
