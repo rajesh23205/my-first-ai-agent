@@ -66,14 +66,14 @@ calculator_tool = {
 # --------------------------------------------------
 
 
-def run_agent(user_question: str) -> str:
+def run_agent(user_question: str, tool_choice: bool = False) -> str:
 
     # Ask OpenAI to process the user's question.
     response = client.responses.create(
         model="gpt-5.6-luna",
         input=user_question,
         tools=[calculator_tool],
-        tool_choice="required",
+        tool_choice="required" if tool_choice else "auto",
     )
 
     # --------------------------------------------------
@@ -82,8 +82,7 @@ def run_agent(user_question: str) -> str:
 
     for item in response.output:
         if item.type != "function_call":
-            print("Argument is not valid")
-            return
+            return response.output_text
 
         print("Tool:", item.name)
         print("Arguments:", item.arguments)
@@ -156,7 +155,7 @@ def run_agent(user_question: str) -> str:
 
 user_question = "What is 25 multiplied by 48?"
 
-answer = run_agent(user_question)
+answer = run_agent(user_question, tool_choice=True)
 
 print("Final answer:", answer)
 
@@ -167,6 +166,17 @@ print("Final answer:", answer)
 
 user_square_question = "What is square of 25?"
 
-answer = run_agent(user_square_question)
+answer = run_agent(user_square_question, tool_choice=True)
+
+print("Final answer:", answer)
+
+
+# --------------------------------------------------
+# 11. Test square
+# --------------------------------------------------
+
+open_question = "What is capital of India?"
+
+answer = run_agent(open_question, tool_choice=False)
 
 print("Final answer:", answer)
