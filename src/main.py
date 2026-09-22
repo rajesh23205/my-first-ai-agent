@@ -1,3 +1,4 @@
+import json
 import os
 
 from dotenv import load_dotenv
@@ -18,14 +19,18 @@ if not api_key:
 
 
 # --------------------------------------------------
-# 2. Create OpenAI client
+# 2. Create the OpenAI client
 # --------------------------------------------------
 
 client = OpenAI(api_key=api_key)
 
 
 # --------------------------------------------------
-# 3. Describe our calculator tool to OpenAI
+# 3. Describe the calculator tool to OpenAI
+#
+# This tells OpenAI what our Python tool can do.
+# OpenAI does NOT execute calculator().
+# Our Python code executes it later.
 # --------------------------------------------------
 
 calculator_tool = {
@@ -48,7 +53,7 @@ calculator_tool = {
             },
             "b": {
                 "type": "number",
-                "description": "The second number. Not required for squre",
+                "description": ("The second number. Not required for square."),
             },
         },
         "required": ["a", "operation"],
@@ -57,9 +62,13 @@ calculator_tool = {
 
 
 # --------------------------------------------------
-# 10. Create a common function
+# 4. Run the AI agent
 # --------------------------------------------------
-def run_agent(user_question: str, force_tool: bool):
+
+
+def run_agent(user_question: str, force_tool: bool = False) -> str:
+
+    # Ask OpenAI to process the user's question.
     response = client.responses.create(
         model="gpt-5.6-luna",
         input=user_question,
@@ -67,72 +76,96 @@ def run_agent(user_question: str, force_tool: bool):
         tool_choice="required" if force_tool else "auto",
     )
 
+    # --------------------------------------------------
+    # 5. Look for a tool call in OpenAI's response
+    # --------------------------------------------------
+
     for item in response.output:
-        import json
+        if item.type != "function_call":
+            continue
 
-        if item.type == "function_call":
-            print("Tool:", item.name)
-            print("Arguments:", item.arguments)
+        print("Tool:", item.name)
+        print("Arguments:", item.arguments)
+
+        # --------------------------------------------------
+        # 6. Execute our Python function
+        # --------------------------------------------------
+
+        if item.name == "calculator":
+            # Convert OpenAI's JSON arguments into a Python dictionary.
+            arguments = json.loads(item.arguments)
+
+            # Execute the actual Python calculator function.
+            result = calculator(**arguments)
+
+            print("Tool result:", result)
 
             # --------------------------------------------------
-            # 6. Execute the requested Python function
+            # 7. Send the tool result back to OpenAI
             # --------------------------------------------------
 
-            if item.name == "calculator":
-                # import json
+            tool_output = {
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": str(result),
+            }
 
-                arguments = json.loads(item.arguments)
+            # --------------------------------------------------
+            # 8. Ask OpenAI to generate the final answer
+            # --------------------------------------------------
 
-                result = calculator(**arguments)
+            final_response = client.responses.create(
+                model="gpt-5.6-luna",
+                input=[
+                    {
+                        "role": "user",
+                        "content": user_question,
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": item.call_id,
+                        "name": item.name,
+                        "arguments": item.arguments,
+                    },
+                    tool_output,
+                    {
+                        "role": "user",
+                        "content": (
+                            "Using the calculator result, answer "
+                            "the user's question in a clear "
+                            "natural-language sentence."
+                        ),
+                    },
+                ],
+                tools=[calculator_tool],
+            )
 
-                print("Tool result:", result)
+            return final_response.output_text
 
-                # --------------------------------------------------
-                # 7. Send the tool result back to OpenAI
-                # --------------------------------------------------
+    # --------------------------------------------------
+    # 9. No tool was called
+    # --------------------------------------------------
 
-                tool_output = {
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": str(result),
-                }
+    return response.output_text
 
-                # --------------------------------------------------
-                # 8. Ask OpenAI for the final answer
-                # --------------------------------------------------
 
-                final_response = client.responses.create(
-                    model="gpt-5.6-luna",
-                    input=[
-                        {
-                            "role": "user",
-                            "content": user_question,
-                        },
-                        {
-                            "type": "function_call",
-                            "call_id": item.call_id,
-                            "name": item.name,
-                            "arguments": item.arguments,
-                        },
-                        tool_output,
-                        {
-                            "role": "user",
-                            "content": "Using the calculator result, answer the user's question in a clear natural-language sentence.",
-                        },
-                    ],
-                    tools=[calculator_tool],
-                )
-
-                # --------------------------------------------------
-                # 9. Print OpenAI's final answer
-                # --------------------------------------------------
-
-                print("Final answer:", final_response.output_text)
-
+# --------------------------------------------------
+# 10. Test multiplication
+# --------------------------------------------------
 
 user_question = "What is 25 multiplied by 48?"
 
-run_agent(user_question, force_tool=False)
+answer = run_agent(user_question, force_tool=False)
+
+print("Final answer:", answer)
+
+
+# --------------------------------------------------
+# 11. Test square
+# --------------------------------------------------
 
 user_square_question = "What is square of 25?"
-run_agent(user_square_question, force_tool=True)
+
+answer = run_agent(user_square_question, force_tool=True)
+
+print("Final answer:", answer)
